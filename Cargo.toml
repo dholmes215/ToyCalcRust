@@ -1,0 +1,9 @@
+[package]
+name = "toycalc"
+version = "0.1.0"
+authors = ["David Holmes <dholmes@dholmes.us>"]
+
+[dependencies]
+libc = "0.2.0"
+gio = "^0"
+gtk = "^0"
