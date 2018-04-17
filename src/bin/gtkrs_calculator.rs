@@ -97,6 +97,9 @@ fn create_window(application: &gtk::Application) {
         Inhibit(false)
     }));
 
+    // The gtk::Window "owns" the Calculator indirectly through Rcs which are cloned into the
+    // gtk::Button callback closures.  When the Window is deleted, its widgets and their callbacks
+    // will be deleted, deleting the Calculator.
     let mut calc = Rc::new(RefCell::new(Calculator::new()));
 
     let main_box = gtk::Box::new(gtk::Orientation::Vertical, 10);
