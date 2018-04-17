@@ -21,24 +21,41 @@ extern crate gio;
 
 use toycalc::*;
 
-//use gio::prelude::*;
+use gio::prelude::*;
 use gtk::prelude::*;
 
-//use std::env::args;
+use std::env::args;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-
+// See http://gtk-rs.org/tuto/closures
+macro_rules! clone {
+    (@param _) => ( _ );
+    (@param $x:ident) => ( $x );
+    ($($n:ident),+ => move || $body:expr) => (
+        {
+            $( let $n = $n.clone(); )+
+            move || $body
+        }
+    );
+    ($($n:ident),+ => move |$($p:tt),+| $body:expr) => (
+        {
+            $( let $n = $n.clone(); )+
+            move |$(clone!(@param $p),)+| $body
+        }
+    );
+}
 
 fn configure_button(button: &gtk::Button, label: &str) {
     button.set_label(""); // Create the child label widget so we can get it
 
     match button.get_child() {
         Some(ref child) => match child.clone().downcast::<gtk::Label>() {
-            Ok(ref button_label) => button_label.set_markup(&*format!("<span font='24'>{}</span>", label)),
-            Err(_) => (),
+            Ok(ref button_label) =>
+                button_label.set_markup(&*format!("<span font='24'>{}</span>", label)),
+            Err(_) => panic!("gtk::Button child wasn't a gtk::Label (should never happen)"),
         },
-        None => (),
+        None => panic!("gtk::Button didn't have a child (should never happen)"),
     }
 
     // GTK lays out widgets according to their expand and size request
@@ -49,51 +66,38 @@ fn configure_button(button: &gtk::Button, label: &str) {
     button.set_size_request(50, 50);
 }
 
-fn configure_op_button_handler(strong_calc: &mut Rc<RefCell<Calculator>>, button: &gtk::Button, operation: Operation) {
-    let weak_calc = Rc::downgrade(strong_calc);
-    button.connect_clicked(move |_| { match weak_calc.upgrade() {
-        Some(ref calc) => calc.borrow_mut().press_operation(operation),
-        None => (),
-    }});
-}
-
-fn configure_eq_button_handler(strong_calc: &mut Rc<RefCell<Calculator>>, button: &gtk::Button) {
-    let weak_calc = Rc::downgrade(strong_calc);
-    button.connect_clicked(move |_| { match weak_calc.upgrade() {
-        Some(ref calc) => calc.borrow_mut().press_equals(),
-        None => (),
-    }});
-}
-
-fn new_op_button(strong_calc: &mut Rc<RefCell<Calculator>>, operation: Operation) -> gtk::Button {
-
+fn new_digit_button(calc: &mut Rc<RefCell<Calculator>>, digit: i8) -> gtk::Button {
     let button = gtk::Button::new();
-    configure_button(&button, operation.to_str());
-    configure_op_button_handler(strong_calc, &button, operation);
+    configure_button(&button, &digit.to_string());
+    button.connect_clicked(clone!(calc => move |_| { calc.borrow_mut().press_digit(digit)}));
     button
 }
 
-fn new_eq_button(strong_calc: &mut Rc<RefCell<Calculator>>) -> gtk::Button {
+fn new_op_button(calc: &mut Rc<RefCell<Calculator>>, op: Operation) -> gtk::Button {
+    let button = gtk::Button::new();
+    configure_button(&button, op.to_str());
+    button.connect_clicked(clone!(calc => move |_| { calc.borrow_mut().press_operation(op)}));
+    button
+}
 
+fn new_eq_button(calc: &mut Rc<RefCell<Calculator>>) -> gtk::Button {
     let button = gtk::Button::new();
     configure_button(&button, "=");
-    configure_eq_button_handler(strong_calc, &button);
+    button.connect_clicked(clone!(calc => move |_| { calc.borrow_mut().press_equals()}));
     button
 }
 
-//fn build_ui(application: &gtk::Application) {
-fn create_window(strong_calc: &mut Rc<RefCell<Calculator>>) {
-    let window = gtk::Window::new(gtk::WindowType::Toplevel);
-
+fn create_window(application: &gtk::Application) {
+    let window = gtk::ApplicationWindow::new(application);
     window.set_title("gtk-rs Calculator");
     window.set_border_width(10);
     window.set_position(gtk::WindowPosition::Center);
-
-    window.connect_delete_event(|_, _| {
-        gtk::main_quit();
+    window.connect_delete_event(clone!(window => move |_, _| {
+        window.destroy();
         Inhibit(false)
-    });
+    }));
 
+    let mut calc = Rc::new(RefCell::new(Calculator::new()));
 
     let main_box = gtk::Box::new(gtk::Orientation::Vertical, 10);
     window.add(&main_box);
@@ -102,7 +106,7 @@ fn create_window(strong_calc: &mut Rc<RefCell<Calculator>>) {
     display_label.set_markup("<span font='32'>0</span>");
     display_label.set_halign(gtk::Align::End);
     main_box.add(&display_label);
-    strong_calc.borrow_mut().add_display_listener(Box::new(
+    calc.borrow_mut().add_display_listener(Box::new(
         move |str| display_label.set_markup(&*format!("<span font='32'>{}</span>", str))));
 
     let button_grid = gtk::Grid::new();
@@ -110,14 +114,7 @@ fn create_window(strong_calc: &mut Rc<RefCell<Calculator>>) {
 
     let mut digit_buttons: Vec<gtk::Button> = vec![];
     for i in 0..10 {
-        digit_buttons.push(gtk::Button::new_with_label(""));
-        configure_button(&digit_buttons[i], &*i.to_string());
-        //digit_buttons[i].connect_clicked(move |_| { println!("{}", i); });
-        let mut weak_calc = Rc::downgrade(strong_calc);
-        digit_buttons[i].connect_clicked(move |_| { match weak_calc.upgrade() {
-            Some(ref calc) => calc.borrow_mut().press_digit(i as i8),
-            None => (),
-        }});
+        digit_buttons.push(new_digit_button(&mut calc, i as i8));
     }
 
     button_grid.attach(&digit_buttons[0], 0, 3, 2, 1);
@@ -131,11 +128,11 @@ fn create_window(strong_calc: &mut Rc<RefCell<Calculator>>) {
     button_grid.attach(&digit_buttons[8], 1, 0, 1, 1);
     button_grid.attach(&digit_buttons[9], 2, 0, 1, 1);
 
-    let add_button = new_op_button(strong_calc, Operation::Add);
-    let sub_button = new_op_button(strong_calc, Operation::Subtract);
-    let mul_button = new_op_button(strong_calc, Operation::Multiply);
-    let div_button = new_op_button(strong_calc, Operation::Divide);
-    let eq_button = new_eq_button(strong_calc);
+    let add_button = new_op_button(&mut calc, Operation::Add);
+    let sub_button = new_op_button(&mut calc, Operation::Subtract);
+    let mul_button = new_op_button(&mut calc, Operation::Multiply);
+    let div_button = new_op_button(&mut calc, Operation::Divide);
+    let eq_button = new_eq_button(&mut calc);
 
     button_grid.attach(&add_button, 3, 0, 1, 1);
     button_grid.attach(&sub_button, 3, 1, 1, 1);
@@ -146,27 +143,14 @@ fn create_window(strong_calc: &mut Rc<RefCell<Calculator>>) {
     window.show_all();
 }
 
-
 fn main() {
-/*
     let application = gtk::Application::new("us.dholmes.rust_calculator",
                                             gio::ApplicationFlags::empty())
                                        .expect("Initialization failed...");
 
-    application.connect_startup(|app| {
-        build_ui(app);
+    application.connect_activate(|app| {
+        create_window(app);
     });
 
-    application.connect_activate(|_| {});
-
     application.run(&args().collect::<Vec<_>>());
-
-*/
-
-    gtk::init().unwrap();
-
-    let mut strong_calc = Rc::new(RefCell::new(Calculator::new()));
-
-    create_window(&mut strong_calc);
-    gtk::main();
 }
