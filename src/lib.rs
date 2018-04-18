@@ -74,7 +74,6 @@ impl Calculator {
     }
 
     pub fn press_digit(&mut self, digit: i8) {
-
         if self.equals_pressed || self.error {
             self.reset();
         };
