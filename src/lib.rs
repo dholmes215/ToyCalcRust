@@ -145,6 +145,14 @@ impl Calculator {
         self.display_listeners.push(listener);
     }
 
+    pub fn get_display_string(&self) -> String {
+        if self.error {
+            return self.error_string.clone()
+        } else {
+            return self.get_display_value().to_string()
+        }
+    }
+
     fn reset(&mut self) {
         self.accumulator = 0;
         self.input = 0;
@@ -154,14 +162,6 @@ impl Calculator {
         self.current_display = Display::Input;
         self.equals_pressed = false;
         self.error = false;
-    }
-
-    fn get_display_string(&self) -> String {
-        if self.error {
-            return self.error_string.clone()
-        } else {
-            return self.get_display_value().to_string()
-        }
     }
 
     fn get_display_value(&self) -> i64 {
