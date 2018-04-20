@@ -7,3 +7,9 @@ authors = ["David Holmes <dholmes@dholmes.us>"]
 libc = "0.2.0"
 gio = "^0"
 gtk = "^0"
+relm = "^0.14.4"
+relm-attributes = "^0.14.4"
+relm-derive = "^0.14.4"
+
+#[features]
+#default = ["relm/unstable", "relm-attributes/unstable", "relm-derive/unstable"]
