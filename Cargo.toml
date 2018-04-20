@@ -11,5 +11,11 @@ relm = "^0.14.4"
 relm-attributes = "^0.14.4"
 relm-derive = "^0.14.4"
 
-#[features]
-#default = ["relm/unstable", "relm-attributes/unstable", "relm-derive/unstable"]
+[[bin]]
+name = "gtkrs_calculator"
+path = "src/bin/gtkrs_calculator.rs"
+
+[[bin]]
+name = "relm_calculator"
+path = "src/bin/relm_calculator.rs"
+required-features = ["proc_macro"]
